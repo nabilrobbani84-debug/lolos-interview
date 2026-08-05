@@ -13,6 +13,10 @@ export default function CustomVacancyPage() {
   const [cvText, setCvText] = useState('React, Next.js, TypeScript, Tailwind CSS, SQL, Git, HTML5, CSS3');
   const [customCompany, setCustomCompany] = useState('');
   const [customPosition, setCustomPosition] = useState('');
+  const [vacancyText, setVacancyText] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [parsedResult, setParsedResult] = useState<any>(null);
+  const [cvMatchReport, setCvMatchReport] = useState<any>(null);
 
   const handleUseExample = () => {
     setVacancyText(`Full Stack Engineer
