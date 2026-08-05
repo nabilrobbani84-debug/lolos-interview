@@ -10,10 +10,9 @@ import CVRequirementComparison from '@/components/vacancy/CVRequirementCompariso
 export default function CustomVacancyPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'paste' | 'manual' | 'upload' | 'url'>('paste');
-  const [vacancyText, setVacancyText] = useState('');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [parsedResult, setParsedResult] = useState<any>(null);
-  const [cvMatchReport, setCvMatchReport] = useState<any>(null);
+  const [cvText, setCvText] = useState('React, Next.js, TypeScript, Tailwind CSS, SQL, Git, HTML5, CSS3');
+  const [customCompany, setCustomCompany] = useState('');
+  const [customPosition, setCustomPosition] = useState('');
 
   const handleUseExample = () => {
     setVacancyText(`Full Stack Engineer
@@ -28,6 +27,8 @@ Requirements:
 - Pemahaman Relational Database SQL dan NoSQL
 - Berpengalaman dengan Caching, CI/CD, dan Secure Programming
 - Terbiasa bekerja dalam Agile development environment`);
+    setCustomCompany('PT Siaga Abdi Utama');
+    setCustomPosition('Full Stack Engineer');
   };
 
   const handleAnalyze = async () => {
@@ -41,14 +42,21 @@ Requirements:
       const data = await res.json();
       if (data.success) {
         setParsedResult(data.parsed);
+        if (data.parsed.companyName && !customCompany) {
+          setCustomCompany(data.parsed.companyName);
+        }
+        if (data.parsed.jobTitle && !customPosition) {
+          setCustomPosition(data.parsed.jobTitle);
+        }
 
-        // Fetch CV match report
+        // Fetch CV match report based on dynamic cvText input
+        const cleanCvSkills = cvText.split(',').map(s => s.trim()).filter(Boolean);
         const matchRes = await fetch('/api/vacancies/custom-vac-1/match-cv', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             vacancyText,
-            cvSkills: ['React', 'Next.js', 'TypeScript', 'SQL', 'Git', 'MySQL', 'CodeIgniter', 'PHP']
+            cvSkills: cleanCvSkills.length > 0 ? cleanCvSkills : ['React', 'Next.js', 'TypeScript']
           })
         });
         const matchData = await matchRes.json();
@@ -68,16 +76,17 @@ Requirements:
       const sessionId = `ai-sess-custom-${Date.now()}`;
       sessionStorage.setItem(`ai_session_config_${sessionId}`, JSON.stringify({
         positionId: 'pos-custom-1',
-        positionName: parsedResult.jobTitle || 'Full Stack Engineer',
+        positionName: customPosition || parsedResult?.jobTitle || 'Full Stack Engineer',
         companyId: 'comp-custom-1',
-        companyName: parsedResult.companyName || 'PT Siaga Abdi Utama',
+        companyName: customCompany || parsedResult?.companyName || 'Perusahaan Kustom',
         experienceLevel: 'junior',
         difficulty: 'medium',
         language: 'indonesia',
         durationMode: 'standard',
         hrVoiceId: 'sarah-friendly',
         techVoiceId: 'andi-professional',
-        customVacancyText: vacancyText
+        customVacancyText: vacancyText,
+        cvSkills: cvText.split(',').map(s => s.trim()).filter(Boolean)
       }));
       router.push(`/interview/waiting-room?id=${sessionId}`);
     }
@@ -130,12 +139,45 @@ Requirements:
         <div className="lg:col-span-6 space-y-6">
           {activeTab === 'paste' && (
             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
-              <h3 className="text-sm font-bold text-white">Tempel Deskripsi Lowongan:</h3>
+              <h3 className="text-sm font-bold text-white">Detail Target Lowongan & Perusahaan:</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] uppercase font-bold text-slate-400">Nama Perusahaan</label>
+                  <input
+                    type="text"
+                    value={customCompany}
+                    onChange={(e) => setCustomCompany(e.target.value)}
+                    placeholder="Contoh: PT Tokopedia"
+                    className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] uppercase font-bold text-slate-400">Posisi Pekerjaan</label>
+                  <input
+                    type="text"
+                    value={customPosition}
+                    onChange={(e) => setCustomPosition(e.target.value)}
+                    placeholder="Contoh: Frontend Developer"
+                    className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <h3 className="text-sm font-bold text-white pt-2">Tempel Deskripsi Lowongan & Kualifikasi Wajib:</h3>
               <textarea
-                rows={10}
+                rows={6}
                 value={vacancyText}
                 onChange={(e) => setVacancyText(e.target.value)}
-                placeholder={`Full Stack Engineer\nPT Siaga Abdi Utama\nJakarta Raya, Indonesia\nDi Kantor\n\nRequirements:\n- PHP, CodeIgniter, Laravel\n- React, Next.js`}
+                placeholder={`Requirements:\n- PHP, CodeIgniter, Laravel\n- React, Next.js`}
+                className="w-full p-4 rounded-2xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-indigo-500 font-sans"
+              ></textarea>
+
+              <h3 className="text-sm font-bold text-white pt-2">Keahlian di CV Anda (Pisahkan dengan koma):</h3>
+              <textarea
+                rows={3}
+                value={cvText}
+                onChange={(e) => setCvText(e.target.value)}
+                placeholder="React, Next.js, TypeScript, Tailwind CSS, SQL, Git..."
                 className="w-full p-4 rounded-2xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-indigo-500 font-sans"
               ></textarea>
 

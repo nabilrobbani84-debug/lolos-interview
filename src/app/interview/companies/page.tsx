@@ -90,6 +90,26 @@ function CompanySelectionForm() {
           </div>
         ))}
       </div>
+
+      {/* Custom Company Option */}
+      <div className="bg-slate-900/60 border border-dashed border-indigo-500/30 rounded-3xl p-8 hover:border-indigo-500 transition-all flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl mt-8">
+        <div className="space-y-2 max-w-xl text-left">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-[10px] font-bold uppercase">
+            <Sparkles className="w-3.5 h-3.5" />
+            Kustomisasi Penuh
+          </div>
+          <h3 className="text-xl font-bold text-white">Gunakan Lowongan & Ketentuan Kustom</h3>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Ingin melamar ke perusahaan spesifik yang tidak ada di daftar? Tempel deskripsi lowongan kerja (dari LinkedIn, Glints, JobStreet, dll.) dan sesuaikan langsung dengan CV/kualifikasi Anda.
+          </p>
+        </div>
+        <Link
+          href={`/interview/custom-vacancy?position=${positionSlug}`}
+          className="flex items-center gap-2 px-6 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition shadow-lg whitespace-nowrap"
+        >
+          Sesuaikan Lowongan & CV <ArrowRight className="w-4 h-4" />
+        </Link>
+      </div>
     </div>
   );
 }
