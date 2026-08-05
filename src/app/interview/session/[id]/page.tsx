@@ -23,9 +23,11 @@ export default function AIInterviewRoomSessionPage() {
   const sessionId = params?.id as string;
 
   const [sessionConfig, setSessionConfig] = useState<any>(null);
-  const [stage, setStage] = useState<'pembukaan' | 'perkenalan' | 'hr' | 'teknis' | 'case' | 'kandidat_tanya' | 'penutup'>('pembukaan');
+  const [currentStageEnum, setCurrentStageEnum] = useState<string>('introduction');
   const [activeInterviewer, setActiveInterviewer] = useState<'sarah' | 'andi'>('sarah');
   const [conversationState, setConversationState] = useState<InterviewConversationState>('interviewer_speaking');
+  const [fullTranscript, setFullTranscript] = useState('');
+  const [isInitializing, setIsInitializing] = useState(true);
 
   const [currentQuestionText, setCurrentQuestionText] = useState('');
   const [answerInput, setAnswerInput] = useState('');
@@ -46,6 +48,7 @@ export default function AIInterviewRoomSessionPage() {
   // Video feed handles
   const candidateVideoRef = useRef<HTMLVideoElement | null>(null);
   const candidateStreamRef = useRef<MediaStream | null>(null);
+  const [hasStream, setHasStream] = useState(false);
 
   // Candidate Voice Recorder Hook
   const {
@@ -88,21 +91,30 @@ export default function AIInterviewRoomSessionPage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const stored = sessionStorage.getItem(`ai_session_config_${sessionId}`);
+      let config = {
+        positionName: 'Frontend Developer',
+        companyName: 'Nexora Digital',
+        difficulty: 'medium',
+        language: 'indonesia',
+        hrVoiceId: 'sarah-friendly',
+        techVoiceId: 'andi-professional',
+        seniority: 'Junior',
+        customVacancyText: '',
+        technicalSkills: { mustHave: [] }
+      };
+
       if (stored) {
-        const parsed = JSON.parse(stored);
-        setSessionConfig(parsed);
-        if (parsed.volume !== undefined) globalAudioQueue.setVolume(parsed.volume);
-        if (parsed.speakingRate !== undefined) globalAudioQueue.setSpeakingRate(parsed.speakingRate);
-        if (parsed.isMuted !== undefined) globalAudioQueue.setMuted(parsed.isMuted);
-      } else {
-        setSessionConfig({
-          positionName: 'Frontend Developer',
-          companyName: 'Nexora Digital',
-          difficulty: 'medium',
-          language: 'indonesia',
-          hrVoiceId: 'sarah-friendly',
-          techVoiceId: 'andi-professional'
-        });
+        config = { ...config, ...JSON.parse(stored) };
+      }
+      setSessionConfig(config);
+      
+      if (config.volume !== undefined) globalAudioQueue.setVolume(config.volume);
+      if (config.speakingRate !== undefined) globalAudioQueue.setSpeakingRate(config.speakingRate);
+      if (config.isMuted !== undefined) globalAudioQueue.setMuted(config.isMuted);
+
+      // Trigger first AI prompt
+      if (isInitializing) {
+        triggerAIGeneration(true, config, '', '');
       }
     }
 
@@ -134,9 +146,7 @@ export default function AIInterviewRoomSessionPage() {
     navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       .then(stream => {
         candidateStreamRef.current = stream;
-        if (candidateVideoRef.current) {
-          candidateVideoRef.current.srcObject = stream;
-        }
+        setHasStream(true);
       })
       .catch(err => console.warn('Camera/Mic access error: ', err));
 
@@ -152,81 +162,104 @@ export default function AIInterviewRoomSessionPage() {
     };
   }, [sessionId, startRecording, stopRecording, micMuted]);
 
-  // Stage Dialogue Trigger
+  // Ensure video element gets the stream whenever it mounts or stream changes
   useEffect(() => {
-    triggerStageDialogue();
-  }, [stage]);
-
-  const triggerStageDialogue = () => {
-    let text = '';
-    let speaker: 'sarah' | 'andi' = 'sarah';
-
-    if (sessionConfig?.customVacancyText) {
-      const positionName = sessionConfig.positionName || 'Full Stack Engineer';
-      const companyName = sessionConfig.companyName || 'PT Siaga Abdi Utama';
-
-      if (stage === 'pembukaan') {
-        speaker = 'sarah';
-        text = `Selamat pagi. Terima kasih sudah hadir untuk interview posisi ${positionName} di ${companyName}. Saya Sarah dari tim HRD, dan bersama saya ada Pak Andi selaku Lead Engineer.`;
-      } else if (stage === 'perkenalan') {
-        speaker = 'sarah';
-        text = `Silakan perkenalkan diri Anda secara singkat dan jelaskan mengapa Anda tertarik melamar posisi ${positionName} di perusahaan kami.`;
-      } else if (stage === 'hr') {
-        speaker = 'sarah';
-        text = `Posisi ini mensyaratkan kolaborasi tim yang kuat. Ceritakan pengalaman Anda saat bekerja sama dalam lingkungan Agile atau menyelesaikan konflik tim.`;
-      } else if (stage === 'teknis') {
-        speaker = 'andi';
-        text = `Halo, saya Andi. Mari kita bahas kompetensi teknis. Mengacu pada persyaratan kustom Anda: bagaimana cara Anda mendesain database SQL/NoSQL dan menangani secure coding pada Next.js atau Laravel?`;
-      } else if (stage === 'case') {
-        speaker = 'andi';
-        text = `Untuk studi kasus teknis: bagaimana strategi Anda dalam menerapkan CI/CD pipeline dan caching management menggunakan Redis agar backend service scalable?`;
-      } else if (stage === 'kandidat_tanya') {
-        speaker = 'sarah';
-        text = `Sebelum kita menutup sesi, apakah Anda memiliki pertanyaan untuk kami berdua mengenai kultur kerja di ${companyName} atau teknis tim?`;
-      } else if (stage === 'penutup') {
-        speaker = 'sarah';
-        text = `Terima kasih atas penjelasan Anda. Evaluasi kesiapan karir Anda terhadap posisi ${positionName} di ${companyName} telah siap diakses.`;
-      }
-    } else {
-      if (stage === 'pembukaan') {
-        speaker = 'sarah';
-        text = `Selamat pagi. Terima kasih sudah meluangkan waktu untuk mengikuti interview hari ini. Saya Sarah dari tim HRD, dan bersama saya ada Pak Andi selaku Lead Software Engineer.`;
-      } else if (stage === 'perkenalan') {
-        speaker = 'sarah';
-        text = `Silakan perkenalkan diri Anda secara singkat dan ceritakan latar belakang profesional Anda yang paling relevan.`;
-      } else if (stage === 'hr') {
-        speaker = 'sarah';
-        text = `Di CV Anda tertulis kemampuan bekerja di bawah tekanan. Ceritakan pengalaman nyata ketika Anda menghadapi konflik dalam tim developer.`;
-      } else if (stage === 'teknis') {
-        speaker = 'andi';
-        text = `Halo, saya Andi. Saya ingin membahas aspek teknis. Bagaimana cara Anda mengoptimalkan performa React server component dan menangani hydration error pada Next.js?`;
-      } else if (stage === 'case') {
-        speaker = 'andi';
-        text = `Untuk studi kasus teknis: Anda diminta membuat fitur API dengan konkurensi tinggi. Bagaimana cara Anda mengamankan endpoint dari race condition?`;
-      } else if (stage === 'kandidat_tanya') {
-        speaker = 'sarah';
-        text = `Sebelum kita menutup sesi, apakah Anda memiliki pertanyaan untuk kami berdua mengenai perusahaan atau tim teknis kami?`;
-      } else if (stage === 'penutup') {
-        speaker = 'sarah';
-        text = `Terima kasih atas jawaban Anda yang sangat komprehensif. Sesi interview hari ini selesai. Evaluasi lengkap dan transkrip Anda dapat diakses di halaman berikutnya.`;
-      }
+    if (candidateVideoRef.current && candidateStreamRef.current && !cameraOff) {
+      candidateVideoRef.current.srcObject = candidateStreamRef.current;
     }
+  }, [hasStream, cameraOff]);
 
-    setActiveInterviewer(speaker);
-    setSubtitles(text);
-    setCurrentQuestionText(text);
+  const triggerAIGeneration = async (isFirst: boolean, config: any, lastQ: string, ans: string) => {
+    setConversationState('evaluating_answer');
+    try {
+      const res = await fetch('/api/interview/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          isFirstTurn: isFirst,
+          jobData: {
+            jobTitle: config.positionName,
+            seniority: config.seniority,
+            description: config.customVacancyText,
+            skills: config.technicalSkills ? config.technicalSkills.mustHave?.join(', ') : ''
+          },
+          candidateData: {
+            name: 'Kandidat',
+            summary: 'Data CV terlampir'
+          },
+          lastQuestion: lastQ,
+          candidateAnswer: ans
+        })
+      });
+      const resData = await res.json();
+      
+      if (resData.success) {
+        const { interviewer_response, is_interview_finished, current_stage } = resData.data;
 
-    const voiceId = speaker === 'sarah' 
-      ? (sessionConfig?.hrVoiceId || 'sarah-friendly')
-      : (sessionConfig?.techVoiceId || 'andi-professional');
+        let newTranscript = fullTranscript;
+        if (!isFirst && ans) {
+          newTranscript += `\n[Kandidat]: ${ans}\n`;
+        }
+        newTranscript += `\n[Pewawancara]: ${interviewer_response}\n`;
+        setFullTranscript(newTranscript);
 
-    globalAudioQueue.clearQueue();
-    globalAudioQueue.enqueue({
-      id: `dialogue-${stage}`,
-      speaker,
-      voiceId,
-      text
-    });
+        if (is_interview_finished) {
+          handleInterviewFinished(newTranscript, config);
+          return;
+        }
+
+        setCurrentStageEnum(current_stage || 'technical');
+        const speaker = (current_stage === 'technical' || current_stage === 'case') ? 'andi' : 'sarah';
+        
+        setActiveInterviewer(speaker);
+        setSubtitles(interviewer_response);
+        setCurrentQuestionText(interviewer_response);
+
+        const voiceId = speaker === 'sarah' 
+          ? (config?.hrVoiceId || 'sarah-friendly')
+          : (config?.techVoiceId || 'andi-professional');
+
+        globalAudioQueue.clearQueue();
+        globalAudioQueue.enqueue({
+          id: `dialogue-${Date.now()}`,
+          speaker,
+          voiceId,
+          text: interviewer_response
+        });
+        
+        setIsInitializing(false);
+      }
+    } catch (e) {
+      console.error(e);
+      setSubtitles('Maaf, terjadi kesalahan pada sistem AI kami.');
+    }
+  };
+
+  const handleInterviewFinished = async (finalTranscript: string, config: any) => {
+    setSubtitles("Sesi wawancara telah selesai. Sedang menyusun laporan akhir...");
+    setConversationState('evaluating_answer');
+    try {
+      const res = await fetch('/api/interview/evaluate-final', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fullTranscript: finalTranscript })
+      });
+      const resData = await res.json();
+      
+      if (resData.success) {
+        const finalReport = {
+          sessionId,
+          config,
+          durationSeconds: secondsElapsed,
+          completedAt: new Date().toISOString(),
+          evaluation: resData.data
+        };
+        sessionStorage.setItem(`ai_session_result_${sessionId}`, JSON.stringify(finalReport));
+        window.location.href = `/interview/result/${sessionId}`;
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleReplayQuestion = () => {
@@ -250,108 +283,16 @@ export default function AIInterviewRoomSessionPage() {
 
     const currentAnswerText = answerInput || '(Jawaban lisan diberikan)';
 
-    // Evaluate answer and check if AI follow-up is needed
-    try {
-      const res = await fetch('/api/interview/answer/evaluate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          answerTranscript: currentAnswerText,
-          questionText: currentQuestionText,
-          interviewerType: activeInterviewer === 'sarah' ? 'hr' : 'technical',
-          positionName: sessionConfig?.positionName || 'Frontend Developer'
-        })
-      });
-      const data = await res.json();
-
-      if (data.success && data.followUpRequired && data.followUpText) {
-        // AI Follow-up triggered
-        setConversationState('generating_follow_up');
-        setSubtitles(data.followUpText);
-        setCurrentQuestionText(data.followUpText);
-
-        const voiceId = data.speaker === 'sarah'
-          ? (sessionConfig?.hrVoiceId || 'sarah-friendly')
-          : (sessionConfig?.techVoiceId || 'andi-professional');
-
-        globalAudioQueue.enqueue({
-          id: `followup-${Date.now()}`,
-          speaker: data.speaker,
-          voiceId,
-          text: data.followUpText
-        });
-        setAnswerInput('');
-        return;
-      }
-    } catch (err) {
-      console.warn('AI Answer Evaluation error:', err);
-    }
-
-    // Save answer evaluation
-    if (stage !== 'pembukaan' && stage !== 'penutup') {
-      const evaluation = evaluateAnswer(currentAnswerText, {
-        id: `q-${stage}`,
-        fieldId: 'field-1',
-        positionId: 'pos-1',
-        interviewType: stage === 'hr' ? 'hr' : 'teknis',
-        experienceLevel: 'fresh_grad',
-        difficulty: 'medium',
-        language: 'indonesia',
-        question: currentQuestionText,
-        objective: 'Mengevaluasi kompetensi kandidat.',
-        answerTips: 'Gunakan struktur yang jelas.',
-        sampleAnswer: 'Ini adalah model jawaban revisi standar.'
-      });
-      setAnswersLog(prev => [...prev, {
-        questionText: currentQuestionText,
-        answerText: currentAnswerText,
-        evaluation
-      }]);
-    }
+    setAnswersLog(prev => [...prev, {
+      questionText: currentQuestionText,
+      answerText: currentAnswerText,
+    }]);
 
     setAnswerInput('');
     clearRecording();
-
-    setTimeout(() => {
-      if (stage === 'pembukaan') setStage('perkenalan');
-      else if (stage === 'perkenalan') setStage('hr');
-      else if (stage === 'hr') setStage('teknis');
-      else if (stage === 'teknis') setStage('case');
-      else if (stage === 'case') setStage('kandidat_tanya');
-      else if (stage === 'kandidat_tanya') setStage('penutup');
-      else if (stage === 'penutup') {
-        const finalReport = {
-          sessionId,
-          config: sessionConfig,
-          overallScore: 88,
-          hrScore: 90,
-          technicalScore: 86,
-          communicationScore: 88,
-          confidenceScore: 90,
-          durationSeconds: secondsElapsed,
-          completedAt: new Date().toISOString(),
-          answers: answersLog.length > 0 ? answersLog : [
-            {
-              questionText: 'Silakan perkenalkan diri Anda secara singkat dan ceritakan latar belakang profesional Anda.',
-              answerText: currentAnswerText,
-              evaluation: {
-                score: 86,
-                strengths: ['Jelas', 'Menjelaskan posisi secara relevan'],
-                weaknesses: ['Dapat ditingkatkan dengan angka proyek terukur'],
-                recommendation: 'Jelaskan lebih detail pencapaian proyek Anda.',
-                improvedAnswer: 'Saya lulusan IT dengan spesialisasi pengembangan web. Saya berpengalaman membangun 3 aplikasi produktif menggunakan React.',
-                starAnalysis: { situation: true, task: true, action: true, result: true, feedback: 'Bagus, jawaban terstruktur.' },
-                aspectScores: { communication: 88, relevance: 86, structure: 85, confidence: 88, technical: 86, problemSolving: 85 }
-              }
-            }
-          ]
-        };
-        if (typeof window !== 'undefined') {
-          sessionStorage.setItem(`ai_session_result_${sessionId}`, JSON.stringify(finalReport));
-          window.location.href = `/interview/result/${sessionId}`;
-        }
-      }
-    }, 600);
+    
+    // Call AI to generate next step based on candidate answer
+    await triggerAIGeneration(false, sessionConfig, currentQuestionText, currentAnswerText);
   };
 
   const handleReRecordAnswer = () => {
@@ -369,14 +310,12 @@ export default function AIInterviewRoomSessionPage() {
   };
 
   const getStageName = () => {
-    switch (stage) {
-      case 'pembukaan': return 'Pembukaan';
-      case 'perkenalan': return 'Perkenalan Kandidat';
-      case 'hr': return 'Interview HR';
-      case 'teknis': return 'Interview Teknis';
-      case 'case': return 'Studi Kasus Teknis';
-      case 'kandidat_tanya': return 'Tanya Jawab Kandidat';
-      case 'penutup': return 'Penutup';
+    switch (currentStageEnum) {
+      case 'introduction': return 'Pendahuluan & Perkenalan';
+      case 'behavioral': return 'Interview HR (Behavioral)';
+      case 'technical': return 'Interview Teknis / Studi Kasus';
+      case 'closing': return 'Penutup';
+      default: return 'Interview Berlangsung';
     }
   };
 
@@ -439,10 +378,12 @@ export default function AIInterviewRoomSessionPage() {
           }`}>
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-slate-950 to-indigo-950 relative">
               <div className="text-center space-y-3">
-                <div className={`w-20 h-20 rounded-3xl bg-indigo-600 flex items-center justify-center font-bold text-2xl shadow-lg ${
-                  activeInterviewer === 'sarah' && audioPlaybackState === 'playing' ? 'animate-bounce' : ''
+                <div className={`w-28 h-28 rounded-full overflow-hidden border-4 transition-all duration-300 mx-auto ${
+                  activeInterviewer === 'sarah' && audioPlaybackState === 'playing' ? 'border-indigo-400 shadow-[0_0_20px_rgba(99,102,241,0.6)]' : 'border-slate-800'
                 }`}>
-                  SW
+                  <img src="/images/avatars/sarah.png" alt="Sarah Wijaya" className={`w-full h-full object-cover transition-transform duration-300 ${
+                    activeInterviewer === 'sarah' && audioPlaybackState === 'playing' ? 'scale-110' : ''
+                  }`} />
                 </div>
                 <div>
                   <h4 className="text-sm font-bold text-white">Sarah Wijaya</h4>
@@ -468,10 +409,12 @@ export default function AIInterviewRoomSessionPage() {
           }`}>
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-slate-950 to-indigo-950 relative">
               <div className="text-center space-y-3">
-                <div className={`w-20 h-20 rounded-3xl bg-emerald-600 flex items-center justify-center font-bold text-2xl shadow-lg ${
-                  activeInterviewer === 'andi' && audioPlaybackState === 'playing' ? 'animate-bounce' : ''
+                <div className={`w-28 h-28 rounded-full overflow-hidden border-4 transition-all duration-300 mx-auto ${
+                  activeInterviewer === 'andi' && audioPlaybackState === 'playing' ? 'border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.6)]' : 'border-slate-800'
                 }`}>
-                  AP
+                  <img src="/images/avatars/andi.png" alt="Andi Pratama" className={`w-full h-full object-cover transition-transform duration-300 ${
+                    activeInterviewer === 'andi' && audioPlaybackState === 'playing' ? 'scale-110' : ''
+                  }`} />
                 </div>
                 <div>
                   <h4 className="text-sm font-bold text-white">Andi Pratama</h4>
