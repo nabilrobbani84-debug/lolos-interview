@@ -3,7 +3,7 @@
 import React, { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Building2, ArrowRight, ArrowLeft, Users, Briefcase, Network, Globe } from 'lucide-react';
+import { Building2, ArrowRight, ArrowLeft, Users, Briefcase, Network, Globe, Sparkles } from 'lucide-react';
 import { MOCK_COMPANIES, MOCK_POSITIONS } from '@/lib/mock-data';
 
 function CompanySelectionForm() {
